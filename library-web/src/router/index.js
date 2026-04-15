@@ -58,6 +58,12 @@ const routes = [
         name: 'Employees',
         component: () => import('@/views/employee/index.vue'),
         meta: { title: '人员管理', icon: 'el-icon-s-custom' }
+      },
+      {
+        path: 'remind',
+        name: 'Remind',
+        component: () => import('@/views/remind/index.vue'),
+        meta: { title: '提醒管理', icon: 'el-icon-bell' }
       }
     ]
   },
