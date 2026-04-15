@@ -51,10 +51,12 @@
       </div>
       
       <el-table
+        ref="orderTable"
         v-loading="loading"
         :data="tableData"
         stripe
         style="width: 100%"
+        :row-class-name="getRowClassName"
       >
         <el-table-column type="index" width="50" align="center" />
         <el-table-column prop="orderNo" label="订单编号" width="180" />
@@ -267,7 +269,8 @@ export default {
       rules: {
         borrowerId: [{ required: true, message: '请选择借阅人员', trigger: 'change' }],
         bookId: [{ required: true, message: '请选择图书', trigger: 'change' }]
-      }
+      },
+      highlightedOrderId: null
     }
   },
   created() {
@@ -312,9 +315,47 @@ export default {
         this.tableData = res.data.records
         this.total = res.data.total
         this.loading = false
+        // 如果有高亮的订单，滚动到对应行
+        this.$nextTick(() => {
+          if (this.highlightedOrderId) {
+            this.scrollToHighlightedRow()
+          }
+        })
       }).catch(() => {
         this.loading = false
       })
+    },
+    // 高亮指定订单
+    highlightOrder(orderId) {
+      this.highlightedOrderId = orderId
+      // 先搜索该订单
+      this.searchForm.keyword = ''
+      this.searchForm.status = null
+      this.searchForm.depositStatus = null
+      this.searchForm.paymentStatus = null
+      this.page = 1
+      this.fetchData()
+    },
+    // 获取行样式类名
+    getRowClassName({ row }) {
+      if (this.highlightedOrderId && row.id === this.highlightedOrderId) {
+        return 'highlighted-row'
+      }
+      return ''
+    },
+    // 滚动到高亮行
+    scrollToHighlightedRow() {
+      const rowIndex = this.tableData.findIndex(row => row.id === this.highlightedOrderId)
+      if (rowIndex !== -1 && this.$refs.orderTable) {
+        const rows = this.$refs.orderTable.$el.querySelectorAll('.el-table__body-wrapper tbody tr')
+        if (rows[rowIndex]) {
+          rows[rowIndex].scrollIntoView({ behavior: 'smooth', block: 'center' })
+          // 3秒后清除高亮
+          setTimeout(() => {
+            this.highlightedOrderId = null
+          }, 3000)
+        }
+      }
     },
     handleSearch() {
       this.page = 1
@@ -454,5 +495,26 @@ export default {
 .text-danger {
   color: #f56c6c;
   font-weight: bold;
+}
+
+:deep(.highlighted-row) {
+  background-color: #fdf6ec !important;
+  animation: highlight-pulse 2s ease-in-out;
+}
+
+:deep(.highlighted-row td) {
+  background-color: #fdf6ec !important;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    background-color: #f0f9ff;
+  }
+  50% {
+    background-color: #bae6fd;
+  }
+  100% {
+    background-color: #fdf6ec;
+  }
 }
 </style>

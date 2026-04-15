@@ -31,6 +31,48 @@
       </div>
       
       <div class="header-right">
+        <!-- 通知图标 -->
+        <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
+          <el-popover
+            placement="bottom"
+            width="350"
+            trigger="click"
+            popper-class="notification-popover"
+          >
+            <div class="notification-header">
+              <span class="notification-title">通知消息</span>
+              <el-button v-if="unreadCount > 0" type="text" size="mini" @click="handleMarkAllRead">
+                全部已读
+              </el-button>
+            </div>
+            <div class="notification-list">
+              <div v-if="notificationList.length === 0" class="notification-empty">
+                <i class="el-icon-bell"></i>
+                <p>暂无未读通知</p>
+              </div>
+              <div
+                v-for="item in notificationList"
+                :key="item.id"
+                class="notification-item"
+                :class="{ 'unread': item.status === 0 }"
+                @click="handleNotificationClick(item)"
+              >
+                <div class="notification-item-title">{{ item.title }}</div>
+                <div class="notification-item-content">{{ item.content }}</div>
+                <div class="notification-item-time">{{ formatTime(item.createTime) }}</div>
+              </div>
+            </div>
+            <div class="notification-footer">
+              <el-button type="text" size="small" @click="goToNotifications">
+                查看全部
+              </el-button>
+            </div>
+            <el-button slot="reference" type="text" class="notification-btn">
+              <i class="el-icon-bell"></i>
+            </el-button>
+          </el-popover>
+        </el-badge>
+        
         <el-dropdown @command="handleCommand">
           <span class="user-info">
             <el-avatar :size="32" :src="userInfo.avatar || defaultAvatar"></el-avatar>
@@ -56,12 +98,38 @@
     <el-main class="main-content">
       <router-view />
     </el-main>
+    
+    <!-- 通知弹框 -->
+    <el-dialog
+      :visible.sync="notificationDialogVisible"
+      title="归还提醒"
+      width="500px"
+      :close-on-click-modal="false"
+      custom-class="reminder-dialog"
+    >
+      <div v-if="currentNotification" class="reminder-dialog-content">
+        <div class="reminder-icon">
+          <i class="el-icon-warning-outline"></i>
+        </div>
+        <h3 class="reminder-title">{{ currentNotification.title }}</h3>
+        <p class="reminder-text">{{ currentNotification.content }}</p>
+        <div class="reminder-actions">
+          <el-button type="primary" @click="goToBorrowOrder">
+            去处理
+          </el-button>
+          <el-button @click="notificationDialogVisible = false">
+            稍后处理
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
   </el-container>
 </template>
 
 <script>
 import { mapGetters } from 'vuex'
 import { logout } from '@/api/auth'
+import { getUnreadReturnReminders, countUnread, markAsRead, markAllAsRead } from '@/api/notification'
 
 export default {
   name: 'Layout',
@@ -76,7 +144,12 @@ export default {
         { path: '/users', title: '用户管理', icon: 'el-icon-user' },
         { path: '/departments', title: '部门管理', icon: 'el-icon-office-building' },
         { path: '/employees', title: '人员管理', icon: 'el-icon-s-custom' }
-      ]
+      ],
+      notificationList: [],
+      unreadCount: 0,
+      notificationDialogVisible: false,
+      currentNotification: null,
+      notificationTimer: null
     }
   },
   computed: {
@@ -84,6 +157,13 @@ export default {
     activeMenu() {
       return this.$route.path
     }
+  },
+  mounted() {
+    this.fetchUnreadNotifications()
+    this.startNotificationTimer()
+  },
+  beforeDestroy() {
+    this.stopNotificationTimer()
   },
   methods: {
     handleCommand(command) {
@@ -113,6 +193,112 @@ export default {
         this.$router.push('/login')
       } catch (error) {
         // 用户取消
+      }
+    },
+    async fetchUnreadNotifications() {
+      try {
+        const res = await getUnreadReturnReminders()
+        if (res.code === 200) {
+          this.notificationList = res.data || []
+        }
+        
+        const countRes = await countUnread()
+        if (countRes.code === 200) {
+          this.unreadCount = countRes.data.returnReminderUnread || 0
+        }
+        
+        // 如果有未读通知，显示弹框
+        if (this.notificationList.length > 0 && !this.notificationDialogVisible) {
+          this.showNotificationDialog(this.notificationList[0])
+        }
+      } catch (error) {
+        console.error('获取通知失败:', error)
+      }
+    },
+    startNotificationTimer() {
+      // 每30秒检查一次新通知
+      this.notificationTimer = setInterval(() => {
+        this.fetchUnreadNotifications()
+      }, 30000)
+    },
+    stopNotificationTimer() {
+      if (this.notificationTimer) {
+        clearInterval(this.notificationTimer)
+        this.notificationTimer = null
+      }
+    },
+    showNotificationDialog(notification) {
+      this.currentNotification = notification
+      this.notificationDialogVisible = true
+    },
+    async handleNotificationClick(item) {
+      if (item.status === 0) {
+        try {
+          await markAsRead(item.id)
+          item.status = 1
+          this.unreadCount = Math.max(0, this.unreadCount - 1)
+        } catch (error) {
+          console.error('标记已读失败:', error)
+        }
+      }
+      
+      if (item.relatedOrderId) {
+        this.$router.push({
+          path: '/borrow',
+          query: { orderId: item.relatedOrderId }
+        }).catch(err => {
+          if (err.name !== 'NavigationDuplicated') {
+            throw err
+          }
+        })
+      }
+    },
+    async handleMarkAllRead() {
+      try {
+        await markAllAsRead()
+        this.$message.success('全部标记已读')
+        this.notificationList.forEach(item => {
+          item.status = 1
+        })
+        this.unreadCount = 0
+      } catch (error) {
+        this.$message.error('操作失败')
+      }
+    },
+    goToNotifications() {
+      this.$message.info('通知列表功能开发中')
+    },
+    goToBorrowOrder() {
+      this.notificationDialogVisible = false
+      if (this.currentNotification && this.currentNotification.relatedOrderId) {
+        // 使用对象形式跳转，避免重复导航报错
+        this.$router.push({
+          path: '/borrow',
+          query: { orderId: this.currentNotification.relatedOrderId }
+        }).catch(err => {
+          // 忽略重复导航错误
+          if (err.name !== 'NavigationDuplicated') {
+            throw err
+          }
+        })
+      } else {
+        this.$router.push('/borrow').catch(() => {})
+      }
+    },
+    formatTime(time) {
+      if (!time) return ''
+      const date = new Date(time)
+      const now = new Date()
+      const diff = now - date
+      
+      if (diff < 60000) {
+        return '刚刚'
+      } else if (diff < 3600000) {
+        return Math.floor(diff / 60000) + '分钟前'
+      } else if (diff < 86400000) {
+        return Math.floor(diff / 3600000) + '小时前'
+      } else {
+        return date.toLocaleDateString()
       }
     }
   }
@@ -200,6 +386,25 @@ export default {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 20px;
+}
+
+.notification-badge {
+  cursor: pointer;
+}
+
+.notification-badge :deep(.el-badge__content) {
+  background-color: #F56C6C;
+}
+
+.notification-btn {
+  font-size: 20px;
+  color: #595959;
+  padding: 8px;
+}
+
+.notification-btn:hover {
+  color: #5B8FF9;
 }
 
 .user-info {
@@ -229,5 +434,114 @@ export default {
   margin-top: 64px;
   padding: 24px;
   min-height: calc(100vh - 64px);
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #EBEEF5;
+}
+
+.notification-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.notification-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.notification-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #909399;
+}
+
+.notification-empty i {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.notification-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #EBEEF5;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.notification-item:hover {
+  background-color: #F5F7FA;
+}
+
+.notification-item.unread {
+  background-color: rgba(91, 143, 249, 0.05);
+}
+
+.notification-item.unread .notification-item-title {
+  color: #5B8FF9;
+  font-weight: 500;
+}
+
+.notification-item-title {
+  font-size: 14px;
+  color: #262626;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.notification-item-content {
+  font-size: 12px;
+  color: #8C8C8C;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notification-item-time {
+  font-size: 12px;
+  color: #BFBFBF;
+  margin-top: 6px;
+}
+
+.notification-footer {
+  text-align: center;
+  padding: 12px;
+  border-top: 1px solid #EBEEF5;
+}
+
+.reminder-dialog-content {
+  text-align: center;
+  padding: 20px;
+}
+
+.reminder-icon {
+  font-size: 64px;
+  color: #E6A23C;
+  margin-bottom: 20px;
+}
+
+.reminder-title {
+  font-size: 18px;
+  color: #262626;
+  margin-bottom: 16px;
+}
+
+.reminder-text {
+  font-size: 14px;
+  color: #595959;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.reminder-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
 }
 </style>
