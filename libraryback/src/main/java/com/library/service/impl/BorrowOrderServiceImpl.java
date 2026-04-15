@@ -12,6 +12,7 @@ import com.library.mapper.BookInfoMapper;
 import com.library.mapper.BorrowOrderMapper;
 import com.library.mapper.BorrowerMapper;
 import com.library.service.BorrowOrderService;
+import com.library.service.BorrowReminderService;
 import com.library.service.DepositDetailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,9 @@ public class BorrowOrderServiceImpl extends ServiceImpl<BorrowOrderMapper, Borro
     
     @Autowired
     private DepositDetailService depositDetailService;
+    
+    @Autowired
+    private BorrowReminderService borrowReminderService;
 
     @Override
     public PageResult<BorrowOrder> getBorrowOrderPage(Integer page, Integer size, String keyword, Integer status, Integer depositStatus, Integer paymentStatus) {
@@ -149,6 +153,8 @@ public class BorrowOrderServiceImpl extends ServiceImpl<BorrowOrderMapper, Borro
             order.setOverdueDays((int) overdueDays);
             order.setOverdueFine(new java.math.BigDecimal(overdueDays).multiply(new java.math.BigDecimal("0.5")));
         }
+        
+        borrowReminderService.cancelReminder(orderId);
         
         return this.updateById(order);
     }

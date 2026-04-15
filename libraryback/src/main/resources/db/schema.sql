@@ -324,3 +324,112 @@ INSERT INTO borrow_order (order_no, borrower_id, book_id, deposit_amount, borrow
 ('ORD20240110001', 3, 3, 50.00, 30, '2024-01-10', '2024-02-09', NULL, 0, 1, 0, 0.00, 0, 'admin', ''),
 ('ORD20240115001', 4, 4, 50.00, 30, '2024-01-15', '2024-02-14', '2024-02-10', 2, 1, 0, 0.00, 1, 'admin', '图书损坏扣除押金'),
 ('ORD20240120001', 1, 5, 50.00, 30, '2024-01-20', '2024-02-19', '2024-02-15', 1, 1, 0, 0.00, 1, 'admin', '');
+
+-- 借阅提醒记录表
+CREATE TABLE IF NOT EXISTS borrow_reminder (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '提醒ID',
+    order_id BIGINT NOT NULL COMMENT '借阅订单ID',
+    borrower_id BIGINT NOT NULL COMMENT '借阅人员ID',
+    book_id BIGINT NOT NULL COMMENT '图书ID',
+    reminder_type TINYINT DEFAULT 1 COMMENT '提醒类型：1-归还提醒，2-逾期提醒',
+    reminder_day INT DEFAULT 1 COMMENT '提醒天数：第几天提醒（1/2/3）',
+    sms_sent TINYINT DEFAULT 0 COMMENT '短信是否发送：0-未发送，1-已发送',
+    sms_send_time DATETIME COMMENT '短信发送时间',
+    platform_notified TINYINT DEFAULT 0 COMMENT '平台是否提醒：0-未提醒，1-已提醒',
+    deposit_deducted TINYINT DEFAULT 0 COMMENT '押金是否扣除：0-未扣除，1-已扣除',
+    deposit_deduct_time DATETIME COMMENT '押金扣除时间',
+    deduct_amount DECIMAL(10,2) DEFAULT 0.00 COMMENT '扣除金额',
+    status TINYINT DEFAULT 0 COMMENT '状态：0-进行中，1-已完成，2-已取消',
+    remark VARCHAR(255) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_order_id (order_id),
+    INDEX idx_borrower_id (borrower_id),
+    INDEX idx_status (status),
+    INDEX idx_reminder_day (reminder_day),
+    FOREIGN KEY (order_id) REFERENCES borrow_order(id),
+    FOREIGN KEY (borrower_id) REFERENCES borrower(id),
+    FOREIGN KEY (book_id) REFERENCES book_info(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='借阅提醒记录表';
+
+-- 短信发送记录表
+CREATE TABLE IF NOT EXISTS sms_send_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
+    phone VARCHAR(20) NOT NULL COMMENT '手机号',
+    template_code VARCHAR(50) COMMENT '短信模板编码',
+    content TEXT COMMENT '短信内容',
+    params VARCHAR(500) COMMENT '模板参数JSON',
+    send_status TINYINT DEFAULT 0 COMMENT '发送状态：0-待发送，1-发送中，2-发送成功，3-发送失败',
+    send_time DATETIME COMMENT '发送时间',
+    fail_reason VARCHAR(255) COMMENT '失败原因',
+    provider VARCHAR(50) COMMENT '短信服务商',
+    biz_id VARCHAR(100) COMMENT '业务ID（如订单号）',
+    biz_type VARCHAR(50) COMMENT '业务类型',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_phone (phone),
+    INDEX idx_send_status (send_status),
+    INDEX idx_biz_id (biz_id),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信发送记录表';
+
+-- 平台提醒消息表
+CREATE TABLE IF NOT EXISTS platform_notification (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '消息ID',
+    title VARCHAR(100) NOT NULL COMMENT '消息标题',
+    content VARCHAR(500) NOT NULL COMMENT '消息内容',
+    notification_type TINYINT DEFAULT 1 COMMENT '消息类型：1-归还提醒，2-逾期提醒，3-押金扣除',
+    order_id BIGINT COMMENT '关联订单ID',
+    borrower_id BIGINT COMMENT '借阅人员ID',
+    is_read TINYINT DEFAULT 0 COMMENT '是否已读：0-未读，1-已读',
+    read_time DATETIME COMMENT '阅读时间',
+    read_by VARCHAR(50) COMMENT '阅读人',
+    status TINYINT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_notification_type (notification_type),
+    INDEX idx_order_id (order_id),
+    INDEX idx_is_read (is_read),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台提醒消息表';
+
+-- 短信配置表
+CREATE TABLE IF NOT EXISTS sms_config (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '配置ID',
+    provider VARCHAR(50) NOT NULL COMMENT '服务商：aliyun/tencent/huawei',
+    access_key VARCHAR(100) COMMENT 'AccessKey',
+    secret_key VARCHAR(100) COMMENT 'SecretKey',
+    sign_name VARCHAR(50) COMMENT '短信签名',
+    template_code VARCHAR(50) COMMENT '短信模板编码',
+    region VARCHAR(50) COMMENT '区域',
+    endpoint VARCHAR(255) COMMENT '服务端点',
+    status TINYINT DEFAULT 1 COMMENT '状态：0-禁用，1-启用',
+    remark VARCHAR(255) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信配置表';
+
+-- 插入短信配置测试数据（模拟配置）
+INSERT INTO sms_config (provider, access_key, secret_key, sign_name, template_code, region, endpoint, status, remark) VALUES
+('aliyun', 'TEST_ACCESS_KEY', 'TEST_SECRET_KEY', '图书管理系统', 'SMS_123456789', 'cn-hangzhou', 'dysmsapi.aliyuncs.com', 1, '阿里云短信配置（测试）');
+
+-- 插入借阅提醒测试数据
+INSERT INTO borrow_reminder (order_id, borrower_id, book_id, reminder_type, reminder_day, sms_sent, sms_send_time, platform_notified, deposit_deducted, status, remark) VALUES
+(2, 2, 2, 2, 1, 1, NOW(), 1, 0, 0, '逾期提醒第1天'),
+(2, 2, 2, 2, 2, 1, NOW(), 1, 0, 0, '逾期提醒第2天'),
+(2, 2, 2, 2, 3, 0, NULL, 0, 0, 0, '逾期提醒第3天待发送');
+
+-- 插入短信发送记录测试数据
+INSERT INTO sms_send_record (phone, template_code, content, params, send_status, send_time, provider, biz_id, biz_type) VALUES
+('13900139002', 'SMS_123456789', '【图书管理系统】李小红您好，您借阅的《西游记》已逾期，请尽快归还。', '{"name":"李小红","book":"西游记"}', 2, NOW(), 'aliyun', 'ORD20240105001', 'borrow_reminder'),
+('13900139002', 'SMS_123456789', '【图书管理系统】李小红您好，您借阅的《西游记》已逾期，请尽快归还。', '{"name":"李小红","book":"西游记"}', 2, NOW(), 'aliyun', 'ORD20240105001', 'borrow_reminder');
+
+-- 插入平台提醒消息测试数据
+INSERT INTO platform_notification (title, content, notification_type, order_id, borrower_id, is_read, status) VALUES
+('借阅逾期提醒', '借阅人【李小红】借阅的《西游记》已逾期，请及时处理。', 2, 2, 2, 0, 1),
+('借阅逾期提醒', '借阅人【李小红】借阅的《西游记》已逾期，请及时处理。', 2, 2, 2, 0, 1),
+('押金扣除通知', '借阅人【李小红】因逾期未还书，系统已自动扣除押金50元。', 3, 2, 2, 0, 1);

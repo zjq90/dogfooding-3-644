@@ -55,6 +55,7 @@
         :data="tableData"
         stripe
         style="width: 100%"
+        :row-class-name="tableRowClassName"
       >
         <el-table-column type="index" width="50" align="center" />
         <el-table-column prop="orderNo" label="订单编号" width="180" />
@@ -236,6 +237,12 @@ import { getBookList } from '@/api/book'
 
 export default {
   name: 'BorrowOrder',
+  props: {
+    highlightOrderId: {
+      type: Number,
+      default: null
+    }
+  },
   data() {
     return {
       loading: false,
@@ -273,7 +280,22 @@ export default {
   created() {
     this.fetchData()
   },
+  watch: {
+    highlightOrderId: {
+      handler(newVal, oldVal) {
+        if (newVal && newVal !== oldVal) {
+          this.fetchData()
+        }
+      }
+    }
+  },
   methods: {
+    tableRowClassName({row}) {
+      if (this.highlightOrderId && row.id === this.highlightOrderId) {
+        return 'highlight-row'
+      }
+      return ''
+    },
     getStatusText(status) {
       const map = { 0: '借阅中', 1: '已归还', 2: '逾期' }
       return map[status] || '未知'
@@ -454,5 +476,14 @@ export default {
 .text-danger {
   color: #f56c6c;
   font-weight: bold;
+}
+</style>
+
+<style>
+.highlight-row {
+  background-color: #ecf5ff !important;
+}
+.highlight-row:hover > td {
+  background-color: #d9ecff !important;
 }
 </style>
