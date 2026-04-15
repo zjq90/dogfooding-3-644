@@ -317,6 +317,68 @@ INSERT INTO deposit_detail (borrower_id, order_no, type, amount, before_balance,
 (4, NULL, 1, 200.00, 0.00, 200.00, 4, 'admin', 1, '开户缴纳押金'),
 (4, 'ORD20240115001', 3, 50.00, 200.00, 150.00, 1, 'admin', 1, '图书损坏扣除押金');
 
+-- 归还提醒记录表
+CREATE TABLE IF NOT EXISTS return_reminder (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '提醒ID',
+    order_id BIGINT NOT NULL COMMENT '借阅订单ID',
+    borrower_id BIGINT NOT NULL COMMENT '借阅人员ID',
+    book_id BIGINT NOT NULL COMMENT '图书ID',
+    reminder_date DATE NOT NULL COMMENT '提醒日期',
+    reminder_count INT DEFAULT 0 COMMENT '提醒次数：1-第1天，2-第2天，3-第3天',
+    sms_sent TINYINT DEFAULT 0 COMMENT '短信是否发送：0-未发送，1-已发送',
+    sms_response VARCHAR(255) COMMENT '短信发送返回结果',
+    platform_notified TINYINT DEFAULT 0 COMMENT '平台是否提醒：0-未提醒，1-已提醒',
+    deposit_deducted TINYINT DEFAULT 0 COMMENT '押金是否已扣除：0-未扣除，1-已扣除',
+    status TINYINT DEFAULT 0 COMMENT '状态：0-提醒中，1-已处理（归还或扣除押金），2-取消',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_order_id (order_id),
+    INDEX idx_borrower_id (borrower_id),
+    INDEX idx_reminder_date (reminder_date),
+    INDEX idx_status (status),
+    FOREIGN KEY (order_id) REFERENCES borrow_order(id),
+    FOREIGN KEY (borrower_id) REFERENCES borrower(id),
+    FOREIGN KEY (book_id) REFERENCES book_info(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='归还提醒记录表';
+
+-- 平台通知消息表
+CREATE TABLE IF NOT EXISTS platform_notification (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '通知ID',
+    title VARCHAR(100) NOT NULL COMMENT '通知标题',
+    content TEXT NOT NULL COMMENT '通知内容',
+    type TINYINT DEFAULT 1 COMMENT '通知类型：1-归还提醒，2-系统公告',
+    related_order_id BIGINT COMMENT '关联订单ID',
+    status TINYINT DEFAULT 0 COMMENT '状态：0-未读，1-已读',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_type (type),
+    INDEX idx_status (status),
+    INDEX idx_related_order_id (related_order_id),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台通知消息表';
+
+-- 短信发送记录表
+CREATE TABLE IF NOT EXISTS sms_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
+    phone VARCHAR(20) NOT NULL COMMENT '手机号',
+    template_code VARCHAR(50) COMMENT '短信模板编码',
+    template_param TEXT COMMENT '模板参数JSON',
+    content TEXT COMMENT '短信内容',
+    send_status TINYINT DEFAULT 0 COMMENT '发送状态：0-待发送，1-发送中，2-成功，3-失败',
+    response_code VARCHAR(50) COMMENT '服务商返回码',
+    response_message VARCHAR(255) COMMENT '服务商返回消息',
+    request_id VARCHAR(100) COMMENT '请求ID',
+    send_time DATETIME COMMENT '发送时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    INDEX idx_phone (phone),
+    INDEX idx_send_status (send_status),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短信发送记录表';
+
 -- 插入借阅订单测试数据
 INSERT INTO borrow_order (order_no, borrower_id, book_id, deposit_amount, borrow_days, borrow_date, due_date, return_date, deposit_status, payment_status, overdue_days, overdue_fine, status, operator, remark) VALUES
 ('ORD20240101001', 1, 1, 50.00, 30, '2024-01-01', '2024-01-31', '2024-01-28', 1, 1, 0, 0.00, 1, 'admin', ''),
@@ -324,3 +386,18 @@ INSERT INTO borrow_order (order_no, borrower_id, book_id, deposit_amount, borrow
 ('ORD20240110001', 3, 3, 50.00, 30, '2024-01-10', '2024-02-09', NULL, 0, 1, 0, 0.00, 0, 'admin', ''),
 ('ORD20240115001', 4, 4, 50.00, 30, '2024-01-15', '2024-02-14', '2024-02-10', 2, 1, 0, 0.00, 1, 'admin', '图书损坏扣除押金'),
 ('ORD20240120001', 1, 5, 50.00, 30, '2024-01-20', '2024-02-19', '2024-02-15', 1, 1, 0, 0.00, 1, 'admin', '');
+
+-- 插入归还提醒测试数据
+INSERT INTO return_reminder (order_id, borrower_id, book_id, reminder_date, reminder_count, sms_sent, platform_notified, deposit_deducted, status) VALUES
+(2, 2, 2, DATE_SUB(CURDATE(), INTERVAL 2 DAY), 1, 1, 1, 0, 0),
+(2, 2, 2, DATE_SUB(CURDATE(), INTERVAL 1 DAY), 2, 1, 1, 0, 0);
+
+-- 插入平台通知测试数据
+INSERT INTO platform_notification (title, content, type, related_order_id, status) VALUES
+('归还提醒：图书《西游记》即将逾期', '借阅人李小红借阅的图书《西游记》已逾期，请尽快联系归还。订单号：ORD20240105001', 1, 2, 0),
+('归还提醒：图书《西游记》逾期第2天', '借阅人李小红借阅的图书《西游记》已逾期2天，请尽快联系归还。订单号：ORD20240105001', 1, 2, 0);
+
+-- 插入短信发送记录测试数据
+INSERT INTO sms_record (phone, template_code, template_param, content, send_status, response_code, response_message, send_time) VALUES
+('13900139002', 'SMS_12345678', '{"name":"李小红","book":"西游记"}', '【图书馆】尊敬的李小红，您借阅的《西游记》已逾期，请尽快归还。', 2, 'OK', '发送成功', NOW()),
+('13900139002', 'SMS_12345678', '{"name":"李小红","book":"西游记"}', '【图书馆】尊敬的李小红，您借阅的《西游记》已逾期2天，请尽快归还，逾期3天将扣除押金。', 2, 'OK', '发送成功', NOW());
