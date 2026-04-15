@@ -4,14 +4,12 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
-/**
- * 图书后台管理系统启动类
- * 主入口，配置组件扫描和缓存
- */
 @SpringBootApplication
 @MapperScan("com.library.mapper")
 @EnableCaching
+@EnableScheduling
 public class LibrarySystemApplication {
 
     public static void main(String[] args) {

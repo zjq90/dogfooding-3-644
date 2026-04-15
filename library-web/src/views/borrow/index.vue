@@ -1,7 +1,7 @@
 <template>
   <div class="borrow-container">
     <el-card class="borrow-card">
-      <el-tabs v-model="activeTab" type="card">
+      <el-tabs v-model="activeTab" type="card" @tab-click="handleTabClick">
         <el-tab-pane label="借阅人员" name="borrower">
           <borrower-page />
         </el-tab-pane>
@@ -9,7 +9,7 @@
           <deposit-page />
         </el-tab-pane>
         <el-tab-pane label="借阅订单" name="order">
-          <borrow-order-page />
+          <borrow-order-page :highlight-order-id="highlightOrderId" :key="componentKey" />
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -30,7 +30,47 @@ export default {
   },
   data() {
     return {
-      activeTab: 'borrower'
+      activeTab: 'borrower',
+      highlightOrderId: null,
+      componentKey: 0
+    }
+  },
+  created() {
+    this.checkRouteQuery()
+  },
+  watch: {
+    '$route.query': {
+      handler(newQuery, oldQuery) {
+        const newOrderId = newQuery.orderId
+        const oldOrderId = oldQuery ? oldQuery.orderId : null
+        
+        if (newOrderId !== oldOrderId) {
+          this.checkRouteQuery()
+        }
+      },
+      deep: true
+    }
+  },
+  methods: {
+    checkRouteQuery() {
+      const tab = this.$route.query.tab
+      const orderId = this.$route.query.orderId
+      
+      if (tab) {
+        this.activeTab = tab
+      }
+      
+      if (orderId) {
+        this.highlightOrderId = parseInt(orderId)
+        this.componentKey++
+      } else {
+        this.highlightOrderId = null
+      }
+    },
+    handleTabClick(tab) {
+      if (tab.name !== 'order') {
+        this.highlightOrderId = null
+      }
     }
   }
 }
