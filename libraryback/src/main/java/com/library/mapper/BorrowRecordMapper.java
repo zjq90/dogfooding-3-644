@@ -38,11 +38,11 @@ public interface BorrowRecordMapper extends BaseMapper<BorrowRecord> {
     @Select("SELECT COUNT(*) FROM borrow_record WHERE user_id = #{userId} AND status = 0 AND due_date < #{today} AND deleted = 0")
     Integer selectUserOverdueCount(@Param("userId") Long userId, @Param("today") LocalDate today);
     
-    @Select("SELECT DATE_FORMAT(borrow_date, '%Y-%m') as month, COUNT(*) as count " +
+    @Select("SELECT CAST(borrow_date AS VARCHAR(7)) as borrow_month, COUNT(*) as count " +
             "FROM borrow_record WHERE deleted = 0 " +
-            "AND borrow_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) " +
-            "GROUP BY DATE_FORMAT(borrow_date, '%Y-%m') " +
-            "ORDER BY month")
+            "AND borrow_date >= DATEADD('MONTH', -12, CURRENT_DATE) " +
+            "GROUP BY CAST(borrow_date AS VARCHAR(7)) " +
+            "ORDER BY borrow_month")
     List<Map<String, Object>> selectMonthlyBorrowStats();
     
     @Select("SELECT b.title as book_title, COUNT(*) as borrow_count " +
